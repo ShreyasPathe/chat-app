@@ -28,7 +28,7 @@
 
 ## 📁 Folder Structure
 
-
+```
 chat-app/
 ├── public/
 ├── src/
@@ -40,7 +40,7 @@ chat-app/
 ├── .env                   # Firebase config (never commit this!)
 ├── package.json
 └── README.md
-
+```
 
 ---
 
