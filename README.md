@@ -1,5 +1,3 @@
----
-
 # 💬 Chat-app — A Secure Real-Time Chat Application
 
 **Chat-app** is a full-stack, real-time messaging platform built with **React** and **Firebase**, featuring **end-to-end encryption (E2EE)** to ensure complete user privacy and secure communication.
