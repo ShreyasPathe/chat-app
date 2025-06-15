@@ -1,15 +1,28 @@
-import React from 'react'
+import React, { useState } from 'react'
 import './LeftSidebar.css'
 import assets from '../../assets/assets'
 
 const LeftSidebar = () => {
+  const [showSubMenu, setShowSubMenu] = useState(false);
+
   return (
     <div className='ls'>
       <div className='ls-top'>
         <div className='ls-nav'>
             <img src={assets.logo} alt="" />
             <div className='menu'>
-                <img src={assets.menu_icon} alt="" />
+                <img 
+                  src={assets.menu_icon} 
+                  alt="" 
+                  onClick={() => setShowSubMenu(!showSubMenu)}
+                />
+                {showSubMenu && (
+                  <div className='sub-menu'>
+                    <p>Edit Profile</p>
+                    <hr />
+                    <p>Logout</p>
+                  </div>
+                )}
             </div>
         </div>
         <div className='ls-search'>

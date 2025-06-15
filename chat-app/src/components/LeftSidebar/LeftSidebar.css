@@ -1,6 +1,8 @@
 .ls{
     background: #001030;
     color: white;
+    display: flex;
+    flex-direction: column;
     height: 75vh;
 }
 .ls-top{
@@ -72,4 +74,35 @@
 }
 .friends:hover span{
     color: white;
+}
+.ls-nav .menu{
+    position: relative;
+    padding: 10px 0px;
+}
+.menu .sub-menu{
+    position: absolute;
+    top: 100%;
+    right: 0;
+    width: 130px;
+    padding: 10px;
+    border-radius: 5px;
+    background-color: white;
+    color: black;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    z-index: 100;
+}
+.menu .sub-menu p{
+    padding: 8px 0;
+    cursor: pointer;
+}
+.menu .sub-menu p:hover{
+    color: #077EFF;
+}
+.menu .sub-menu hr{
+    border: none;
+    border-top: 1px solid #eee;
+    margin: 5px 0;
+}
+.menu:hover .sub-menu{
+    display: block;
 }
