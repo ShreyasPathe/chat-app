@@ -1,5 +1,3 @@
-Got it! Here's your updated and professional `README.md` content using the correct project name: **Chat-app**.
-
 ---
 
 # 💬 Chat-app — A Secure Real-Time Chat Application
