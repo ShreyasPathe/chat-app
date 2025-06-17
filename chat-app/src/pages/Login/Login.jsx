@@ -3,12 +3,16 @@ import './login.css';
 import assets from '../../assets/assets';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
+import { signup, login, resetPassword } from '../../config/firebase';
 
 const Login = () => {
   const navigate = useNavigate();
   const [currState, setCurrState] = useState("Sign up");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -59,7 +63,7 @@ const Login = () => {
       newErrors.password = 'Password must be at least 6 characters';
     }
 
-    if (!formData.agreeToTerms) {
+    if (currState === "Sign up" && !formData.agreeToTerms) {
       newErrors.agreeToTerms = 'You must agree to the terms';
     }
 
@@ -76,16 +80,68 @@ const Login = () => {
 
     setIsLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      toast.success(`${currState} successful!`);
-      // Redirect to home page after successful login/signup
-      navigate('/');
+      if (currState === "Sign up") {
+        const result = await signup(formData.username, formData.email, formData.password);
+        if (result.success) {
+          toast.success('Account created successfully! You may now login.');
+          setCurrState("Login");
+          setFormData({
+            username: '',
+            email: '',
+            password: '',
+            agreeToTerms: false
+          });
+          setErrors({});
+        }
+      } else {
+        const result = await login(formData.email, formData.password);
+        if (result.success) {
+          toast.success('Login successful! Redirecting to chat...');
+          navigate('/chat');
+        }
+      }
     } catch (error) {
-      toast.error('Something went wrong. Please try again.');
+      console.error('Auth error:', error);
+      let errorMessage = error.message || 'Something went wrong. Please try again.';
+      
+      // Handle specific Firebase auth errors
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'This email is already registered. Please try logging in.';
+        setCurrState("Login");
+      } else if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        errorMessage = 'Invalid email or password. Please try again.';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many failed attempts. Please try again later.';
+      }
+
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    if (!resetEmail.trim()) {
+      toast.error('Please enter your email address');
+      return;
+    }
+    if (!/\S+@\S+\.\S+/.test(resetEmail)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      await resetPassword(resetEmail);
+      toast.success('Password reset email sent! Please check your inbox.');
+      setShowResetModal(false);
+      setResetEmail('');
+    } catch (error) {
+      console.error('Reset error:', error);
+      toast.error(error.message || 'Failed to send reset email. Please try again.');
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -145,6 +201,19 @@ const Login = () => {
             {errors.password && <span className="error-message">{errors.password}</span>}
           </div>
 
+          {currState === "Sign up" && (
+            <div className='login-term'>
+              <input
+                type="checkbox"
+                name="agreeToTerms"
+                checked={formData.agreeToTerms}
+                onChange={handleInputChange}
+              />
+              <p>Agree to the terms of use & privacy policy.</p>
+              {errors.agreeToTerms && <span className="error-message">{errors.agreeToTerms}</span>}
+            </div>
+          )}
+
           <button 
             type='submit' 
             className={`submit-button ${isLoading ? 'loading' : ''}`}
@@ -157,17 +226,6 @@ const Login = () => {
             )}
           </button>
 
-          <div className='login-term'>
-            <input
-              type="checkbox"
-              name="agreeToTerms"
-              checked={formData.agreeToTerms}
-              onChange={handleInputChange}
-            />
-            <p>Agree to the terms of use & privacy policy.</p>
-            {errors.agreeToTerms && <span className="error-message">{errors.agreeToTerms}</span>}
-          </div>
-
           <div className='login-forgot'>
             <p className='login-toggle'>
               {currState === "Sign up"
@@ -177,9 +235,58 @@ const Login = () => {
                 Click here
               </span>
             </p>
+            {currState === "Login" && (
+              <button 
+                type="button" 
+                className="forgot-password-btn"
+                onClick={() => setShowResetModal(true)}
+              >
+                Forgot Password?
+              </button>
+            )}
           </div>
         </form>
       </div>
+
+      {/* Reset Password Modal */}
+      {showResetModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>Reset Password</h3>
+            <p>Enter your email address and we'll send you a link to reset your password.</p>
+            <form onSubmit={handleResetPassword}>
+              <div className="form-group">
+                <input
+                  type="email"
+                  placeholder="Enter your email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  className="form-input"
+                />
+              </div>
+              <div className="modal-buttons">
+                <button
+                  type="button"
+                  className="cancel-btn"
+                  onClick={() => {
+                    setShowResetModal(false);
+                    setResetEmail('');
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="submit-btn"
+                  disabled={isResetting}
+                >
+                  {isResetting ? 'Sending...' : 'Send Reset Link'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
