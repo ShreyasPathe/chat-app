@@ -1,175 +1,122 @@
-import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  sendPasswordResetEmail
-} from 'firebase/auth';
-import {
-  getFirestore,
-  collection,
-  doc,
-  setDoc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  limit,
-  serverTimestamp,
-  updateDoc,
-  arrayUnion,
-  arrayRemove,
-  onSnapshot,
-  addDoc
-} from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import { getFirestore, setDoc, doc, getDoc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { toast } from "react-hot-toast";
 
 const firebaseConfig = {
-  // Replace with your Firebase config
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID
+  // ADD YOU FIREBASE CREDENTIALS HERE
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: "",
+  measurementId: ""
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const storage = getStorage(app);
 
-// Auth functions
-export const signIn = (email, password) => 
-  signInWithEmailAndPassword(auth, email, password);
+const signup = async (username, email, password) => {
+  try {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
 
-export const signUp = (email, password) => 
-  createUserWithEmailAndPassword(auth, email, password);
+    // Create user document in Firestore
+    await setDoc(doc(db, 'users', user.uid), {
+      uid: user.uid,
+      username,
+      email,
+      photoURL: null,
+      connections: [],
+      connectionRequests: [],
+      online: true,
+      lastSeen: new Date().toISOString()
+    });
 
-export const logOut = () => signOut(auth);
-
-export const onAuthChange = (callback) => 
-  onAuthStateChanged(auth, callback);
-
-export const resetPassword = (email) => {
-  return sendPasswordResetEmail(auth, email);
+    return { success: true, user };
+  } catch (error) {
+    console.error('Signup error:', error);
+    toast.error(error.message);
+    return { success: false, error };
+  }
 };
 
-// User functions
-export const createUserProfile = async (userId, userData) => {
-  const userRef = doc(db, 'users', userId);
-  await setDoc(userRef, userData);
+const login = async (email, password) => {
+  try {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+
+    // Update user's online status
+    await updateDoc(doc(db, 'users', user.uid), {
+      online: true,
+      lastSeen: new Date().toISOString()
+    });
+
+    return { success: true, user };
+  } catch (error) {
+    console.error('Login error:', error);
+    toast.error(error.message);
+    return { success: false, error };
+  }
 };
 
-export const getUserProfile = async (userId) => {
-  const userRef = doc(db, 'users', userId);
-  const userSnap = await getDoc(userRef);
-  return userSnap.exists() ? userSnap.data() : null;
+const resetPassword = async (email) => {
+  try {
+    await sendPasswordResetEmail(auth, email);
+    return { success: true };
+  } catch (error) {
+    console.error('Reset error:', error);
+    throw error;
+  }
 };
 
-export const updateUserProfile = async (userId, userData) => {
-  const userRef = doc(db, 'users', userId);
-  await updateDoc(userRef, userData);
+export const handleConnectionRequest = async (currentUserId, targetUserId, action) => {
+  try {
+    const currentUserRef = doc(db, 'users', currentUserId);
+    const targetUserRef = doc(db, 'users', targetUserId);
+
+    if (action === 'accept') {
+      // Add to connections array for both users
+      await updateDoc(currentUserRef, {
+        connections: arrayUnion(targetUserId),
+        connectionRequests: arrayRemove({ from: targetUserId })
+      });
+
+      await updateDoc(targetUserRef, {
+        connections: arrayUnion(currentUserId)
+      });
+
+      toast.success('Connection request accepted!');
+    } else if (action === 'reject') {
+      // Remove from connection requests
+      await updateDoc(currentUserRef, {
+        connectionRequests: arrayRemove({ from: targetUserId })
+      });
+
+      toast.success('Connection request rejected');
+    }
+  } catch (error) {
+    console.error('Connection request error:', error);
+    toast.error('Failed to process connection request');
+  }
 };
 
-// Friend functions
-export const sendFriendRequest = async (fromUserId, toUserId) => {
-  const requestRef = await addDoc(collection(db, 'friendRequests'), {
-    from: fromUserId,
-    to: toUserId,
-    status: 'pending',
-    createdAt: new Date().toISOString()
-  });
-  return requestRef.id;
+export const updateUserStatus = async (userId, status) => {
+  try {
+    await updateDoc(doc(db, 'users', userId), {
+      online: status,
+      lastSeen: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Status update error:', error);
+  }
 };
 
-export const acceptFriendRequest = async (requestId) => {
-  const requestRef = doc(db, 'friendRequests', requestId);
-  await updateDoc(requestRef, { status: 'accepted' });
-};
-
-export const getFriends = async (userId) => {
-  const requestsRef = collection(db, 'friendRequests');
-  const q = query(
-    requestsRef,
-    where('status', '==', 'accepted'),
-    where('participants', 'array-contains', userId)
-  );
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data()
-  }));
-};
-
-// Chat functions
-export const createChat = async (participants, type = 'private') => {
-  const chatRef = await addDoc(collection(db, 'chats'), {
-    type,
-    participants,
-    createdAt: new Date().toISOString(),
-    lastMessage: null
-  });
-  return chatRef.id;
-};
-
-export const sendMessage = async (chatId, message) => {
-  const messageRef = await addDoc(collection(db, 'chats', chatId, 'messages'), {
-    ...message,
-    createdAt: new Date().toISOString()
-  });
-  return messageRef.id;
-};
-
-export const getUserChats = async (userId) => {
-  const chatsRef = collection(db, 'chats');
-  const q = query(chatsRef, where('participants', 'array-contains', userId));
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data()
-  }));
-};
-
-// Group functions
-export const createGroup = async (groupData) => {
-  const groupRef = doc(collection(db, 'groups'));
-  await setDoc(groupRef, {
-    ...groupData,
-    createdAt: serverTimestamp(),
-    members: groupData.members,
-    admins: [groupData.createdBy]
-  });
-  return groupRef.id;
-};
-
-// File upload
-export const uploadFile = async (file, path) => {
-  const storageRef = ref(storage, path);
-  await uploadBytes(storageRef, file);
-  return getDownloadURL(storageRef);
-};
-
-// Presence system
-export const updateUserPresence = async (userId, status) => {
-  const userRef = doc(db, 'users', userId);
-  await updateDoc(userRef, {
-    onlineStatus: status,
-    lastSeen: serverTimestamp()
-  });
-};
-
-// Typing indicator
-export const updateTypingStatus = async (conversationId, userId, isTyping) => {
-  const typingRef = doc(db, `conversations/${conversationId}/typing`, userId);
-  await setDoc(typingRef, {
-    isTyping,
-    updatedAt: serverTimestamp()
-  });
-};
-
-export { auth, db, storage }; 
+export { signup, login, resetPassword }
